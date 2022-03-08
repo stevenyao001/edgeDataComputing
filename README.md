@@ -6,17 +6,30 @@
 第二个参数为规则文件所放的位置和名称
 */
 func main() {
-    edgeDataComputing.InitMiddle()
-    input := &edgeDataComputing.Input{
-        Ts:         123456,
-        Properties: &edgeDataComputing.Properties{
-            AddressNames1: 26.1,
-            AddressNames2: 4,
-        },
-    }
-    buf, _ := json.Marshal(input)
-    data, _ := edgeDataComputing.Computing(buf, "./rule.txt")
-    fmt.Println(string(data))
+    InitMiddle("./rule.txt")
+    for i := 0; i < 10000; i++ {
+        tmp := false
+        if i%2 == 0 {
+            tmp = false
+        } else {
+            tmp = true
+        }
+
+		input := &Input{
+			Ts: 123456,
+			Properties: &Properties{
+				MegnetStatus: tmp,
+				Ia:           rand.Intn(60),
+				Ep:           i,
+				Threadhold:   40,
+			},
+		}
+		buf, _ := json.Marshal(input)
+		data, _ := Computing(buf, "./rule.txt")
+		fmt.Println(string(data))
+
+		time.Sleep(time.Second)
+	}
 }
 
 /*
@@ -24,4 +37,4 @@ func main() {
 name:节点名称（key）
 rule:节点的规则
 */
-[{"name":"MegnetStatus","rule":""},{"name":"Num","rule":"if MegnetStatus_last == false \u0026\u0026 MegnetStatus == true {\n\t Num = Num_last + 1\n} else {\n\t Num = Num_last\n}"},{"name":"Status","rule":"if Ia == 0 {\n\t Status = 0\n} else if Ia \u003e 40 {\n\t Status = 2\n} else {\n\t Status = 1\n}\n"},{"name":"Ia","rule":""},{"name":"Ep","rule":""},{"name":"InstantEp","rule":" InstantEp = Ep - Ep_last"}]
+[{"name":"megnet_status","type":"bool","rule":""},{"name":"num","type":"int","rule":"if megnet_status_last == false \u0026\u0026 megnet_status == true {\n\treturn num_last + 1 }\nelse {\n\treturn num_last}\n"},{"name":"status","type":"int","rule":"if ia == 0 {\n\treturn 0\n} else if ia \u003e 40 {\n\treturn 2\n} else {\n\treturn 1\n}"},{"name":"ia","type":"int","rule":""},{"name":"ep","type":"int","rule":""},{"name":"instant_ep","type":"int","rule":" return ep - ep_last"},{"name":"threadhold","type":"int","rule":""}]

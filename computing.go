@@ -1,8 +1,7 @@
-package config
+package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"github.com/bilibili/gengine/builder"
 	"github.com/bilibili/gengine/context"
 	"github.com/bilibili/gengine/engine"
@@ -13,157 +12,172 @@ import (
 
 type ruleData struct {
 	Name string `json:"name"`
+	Type string `json:"type"`
 	Rule string `json:"rule"`
 }
 
-type Input struct {
-	Ts         int64       `json:"ts"`
-	Properties *Properties `json:"properties"`
+type InputTmp struct {
+	Ts         int64                  `json:"ts"`
+	Properties map[string]interface{} `json:"properties"`
 }
 
-type Properties struct {
-	MegnetStatus bool `json:"megnet_status"`
-	Num          int  `json:"num"`
-	Status       int  `json:"status"`
-	Ia           int  `json:"ia"`
-	Ep           int  `json:"ep"`
-	InstantEp    int  `json:"instant_ep"`
-}
+var middle map[string]interface{}
 
-type MiddleData struct {
-	Ts         int64             `json:"ts"`
-	Properties *MiddleProperties `json:"properties"`
-}
+func InitMiddle(path string) {
+	middle = make(map[string]interface{}, 0)
 
-type MiddleProperties struct {
-	MegnetStatus bool `json:"megnet_status"`
-	Num          int  `json:"num"`
-	Status       int  `json:"status"`
-	Ia           int  `json:"ia"`
-	Ep           int  `json:"ep"`
-	InstantEp    int  `json:"instant_ep"`
-}
-
-var middle *MiddleData
-
-func InitMiddle() {
-	middle = &MiddleData{
-		Properties: &MiddleProperties{
-			MegnetStatus: false,
-			Num:          0,
-			Status:       0,
-			Ia:           0,
-			Ep:           0,
-			InstantEp:    0,
-		},
+	ruleD := make([]ruleData, 5)
+	f, err := ioutil.ReadFile(path)
+	if err != nil {
+		panic(err)
+	}
+	err = json.Unmarshal(f, &ruleD)
+	if err != nil {
+		panic(err)
+	}
+	for _, value := range ruleD {
+		if value.Type == "int" {
+			middle[value.Name] = 0
+		} else if value.Type == "bool" {
+			middle[value.Name] = false
+		}
 	}
 }
 
 func Computing(buf []byte, path string) ([]byte, error) {
-	input := GetData(buf)
-	rule, err := GetRule(path)
-	//fmt.Println(rule, "------", err)
+	input, err := GetData(buf)
+	ruleDatas, err := GetRule(input, path)
 	if err != nil {
 		return nil, err
 	}
-	dataContext := context.NewDataContext()
-	dataContext.Add("input", input)
-	dataContext.Add("middle", middle)
 
-	ruleBuilder := builder.NewRuleBuilder(dataContext)
-	e1 := ruleBuilder.BuildRuleFromString(rule)
-	if e1 != nil {
-		panic(e1)
-	}
-	gengine := engine.NewGengine()
-	e := gengine.Execute(ruleBuilder, true)
-	if e != nil {
-		panic(e)
-	}
-	pushMiddleData(input)
+	framework(ruleDatas, input)
 
+	pushMiddleData(input, ruleDatas)
 	return json.Marshal(input)
 }
 
-func pushMiddleData(input *Input) {
-	if middle.Properties.Num != input.Properties.Num {
-		middle = &MiddleData{
-			Ts: input.Ts,
-			Properties: &MiddleProperties{
-				MegnetStatus: input.Properties.MegnetStatus,
-				Num:          middle.Properties.Num + 1,
-				Status:       input.Properties.Status,
-				Ia:           input.Properties.Ia,
-				Ep:           input.Properties.Ep,
-				InstantEp:    input.Properties.InstantEp,
-			},
-		}
-	}else {
-		middle = &MiddleData{
-			Ts: input.Ts,
-			Properties: &MiddleProperties{
-				MegnetStatus: input.Properties.MegnetStatus,
-				Num:          middle.Properties.Num,
-				Status:       input.Properties.Status,
-				Ia:           input.Properties.Ia,
-				Ep:           input.Properties.Ep,
-				InstantEp:    input.Properties.InstantEp,
-			},
+func framework(ruleDatas []ruleData, input map[string]interface{}) {
+	for key, value := range ruleDatas {
+		if value.Rule != "" {
+			//fmt.Println("---------", value.Rule)
+			dataContext := context.NewDataContext()
+			propertiesAdd(ruleDatas, input, middle, dataContext)
+
+			ruleBuilder := builder.NewRuleBuilder(dataContext)
+
+			err := ruleBuilder.BuildRuleFromString(value.Rule)
+			if err != nil {
+				panic(err)
+			}
+			gengine := engine.NewGengine()
+			err = gengine.Execute(ruleBuilder, true)
+			if err != nil {
+				panic(err)
+			}
+			resultMap, _ := gengine.GetRulesResultMap()
+
+			input[value.Name] = resultMap[strconv.Itoa(key)]
 		}
 	}
 }
 
-func GetRule(path string) (string, error) {
-	rule := `
-rule "test" "test"
-begin
-`
-	ruleD := make([]ruleData, 5)
+func propertiesAdd(ruleDatas []ruleData, input map[string]interface{}, middle map[string]interface{}, dataContext *context.DataContext) {
+	for _, value := range ruleDatas {
+		switch input[value.Name].(type) {
+		case int:
+			dataContext.Add(value.Name, input[value.Name].(int))
+		case bool:
+			dataContext.Add(value.Name, input[value.Name].(bool))
+		case float64:
+			dataContext.Add(value.Name, input[value.Name].(float64))
+		case int64:
+			dataContext.Add(value.Name, input[value.Name].(int64))
+		case int32:
+			dataContext.Add(value.Name, input[value.Name].(int32))
+		}
+		switch middle[value.Name].(type) {
+		case int:
+			dataContext.Add(value.Name+"_last", middle[value.Name].(int))
+		case bool:
+			dataContext.Add(value.Name+"_last", middle[value.Name].(bool))
+		case float64:
+			dataContext.Add(value.Name+"_last", middle[value.Name].(float64))
+		case int64:
+			dataContext.Add(value.Name+"_last", middle[value.Name].(int64))
+		case int32:
+			dataContext.Add(value.Name+"_last", middle[value.Name].(int32))
+		}
+	}
+}
+
+func pushMiddleData(input map[string]interface{}, ruleDatas []ruleData) {
+	for _, value := range ruleDatas {
+		middle[value.Name] = input[value.Name]
+	}
+}
+
+func GetRule(input map[string]interface{}, path string) ([]ruleData, error) {
+	ruleDatas := make([]ruleData, 0)
 	f, err := ioutil.ReadFile(path)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	err = json.Unmarshal(f, &ruleD)
+	err = json.Unmarshal(f, &ruleDatas)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	names := make([]string, 0)
-	for _, value := range ruleD {
+	for _, value := range ruleDatas {
 		names = append(names, value.Name)
 	}
 
-	for _, value := range ruleD {
+	for key, value := range ruleDatas {
 		if value.Rule != "" {
-			rule = rule + ruleTmpComputer(value.Rule, names)
-			rule = rule + "\n"
+			rule := `
+rule "` + strconv.Itoa(key) + `" "test"
+begin
+`
+			rule = rule + ruleTmpComputer(input, value.Rule, names)
+			rule = rule + "\nend"
+			ruleDatas[key].Rule = rule
+			//rules = append(rules, rule)
 		}
 	}
-	return rule + "end", nil
+	return ruleDatas, nil
 }
 
-func GetData(buf []byte) *Input {
-	input := new(Input)
-	err := json.Unmarshal(buf, input)
+func GetData(buf []byte) (map[string]interface{}, error) {
+	tmp := new(InputTmp)
+	err := json.Unmarshal(buf, tmp)
 	if err != nil {
-		fmt.Println(err)
+		return nil, err
 	}
-	return input
+	return tmp.Properties, nil
 }
 
-func ruleTmpComputer(rule string, names []string) string {
+func ruleTmpComputer(input map[string]interface{}, rule string, names []string) string {
 	for _, name := range names {
-		nameTmp2 := "[" + name + "_last]" + "{" + strconv.Itoa(len(name)+5) + ",}"
-		replace2 := " middle.Properties." + name
+		/*nameTmp2 := "[" + name + "_last]" + "{" + strconv.Itoa(len(name)+5) + ",}"
+		replace2 := " middle.Properties[" + name + "]"
 		regIf2 := regexp.MustCompile(nameTmp2)
 		if regIf2 != nil {
 			rule = regIf2.ReplaceAllString(rule, replace2)
 		}
 
-		nameTmp := "[ ]+[" + name + "]" + "{" + strconv.Itoa(len(name)) + ",}"
-		replace := " input.Properties." + name
+		nameTmp := "[ ]+[" + name + "]" + "{" + strconv.Itoa(len(name)+5) + ",}"
+		replace := " input.Properties[" + name + "]"
 		regIf := regexp.MustCompile(nameTmp)
 		if regIf != nil {
 			rule = regIf.ReplaceAllString(rule, replace)
+		}*/
+		if name == "threadhold" {
+			nameTmp3 := "[ ]+[" + name + "]" + "{" + strconv.Itoa(len(name)+5) + ",}"
+			replace := " 40"
+			regIf := regexp.MustCompile(nameTmp3)
+			if regIf != nil {
+				rule = regIf.ReplaceAllString(rule, replace)
+			}
 		}
 	}
 
