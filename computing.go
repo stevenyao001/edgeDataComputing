@@ -58,25 +58,27 @@ func Computing(buf []byte, path string) ([]byte, error) {
 }
 
 func framework(ruleDatas []ruleData, input map[string]interface{}) {
+	var ruleTtmp string
+	for _, value := range ruleDatas {
+		ruleTtmp = ruleTtmp + value.Rule + "\n"
+	}
+	//fmt.Println("---------", value.Rule)
+	dataContext := context.NewDataContext()
+	propertiesAdd(ruleDatas, input, middle, dataContext)
+
+	ruleBuilder := builder.NewRuleBuilder(dataContext)
+	err := ruleBuilder.BuildRuleFromString(ruleTtmp)
+	if err != nil {
+		panic(err)
+	}
+	gengine := engine.NewGengine()
+	err = gengine.Execute(ruleBuilder, true)
+	if err != nil {
+		panic(err)
+	}
+	resultMap, _ := gengine.GetRulesResultMap()
 	for key, value := range ruleDatas {
 		if value.Rule != "" {
-			//fmt.Println("---------", value.Rule)
-			dataContext := context.NewDataContext()
-			propertiesAdd(ruleDatas, input, middle, dataContext)
-
-			ruleBuilder := builder.NewRuleBuilder(dataContext)
-
-			err := ruleBuilder.BuildRuleFromString(value.Rule)
-			if err != nil {
-				panic(err)
-			}
-			gengine := engine.NewGengine()
-			err = gengine.Execute(ruleBuilder, true)
-			if err != nil {
-				panic(err)
-			}
-			resultMap, _ := gengine.GetRulesResultMap()
-
 			input[value.Name] = resultMap[strconv.Itoa(key)]
 		}
 	}
@@ -84,6 +86,12 @@ func framework(ruleDatas []ruleData, input map[string]interface{}) {
 
 func propertiesAdd(ruleDatas []ruleData, input map[string]interface{}, middle map[string]interface{}, dataContext *context.DataContext) {
 	for _, value := range ruleDatas {
+		if input[value.Name] == nil {
+			input[value.Name] = middle[value.Name]
+		}
+		if middle[value.Name] == nil {
+			return
+		}
 		switch input[value.Name].(type) {
 		case int:
 			dataContext.Add(value.Name, input[value.Name].(int))
