@@ -39,7 +39,7 @@ func InitMiddle(path string) {
 		if value.Type == "int" {
 			middle[value.Name] = 0
 		} else if value.Type == "bool" {
-			middle[value.Name] = false
+			middle[value.Name] = true
 		}
 	}
 }
