@@ -62,7 +62,7 @@ func framework(ruleDatas []ruleData, input map[string]interface{}) {
 	for _, value := range ruleDatas {
 		ruleTtmp = ruleTtmp + value.Rule + "\n"
 	}
-	//fmt.Println("---------", value.Rule)
+	//fmt.Println("---------", ruleTtmp)
 	dataContext := context.NewDataContext()
 	propertiesAdd(ruleDatas, input, middle, dataContext)
 
