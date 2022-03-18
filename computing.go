@@ -21,9 +21,11 @@ type InputTmp struct {
 	Properties map[string]interface{} `json:"properties"`
 }
 
+type Commputing struct {}
+
 var middle map[string]interface{}
 
-func InitMiddle(path string) {
+func (c *Commputing)InitMiddle(path string) {
 	middle = make(map[string]interface{}, 0)
 
 	ruleD := make([]ruleData, 5)
@@ -44,7 +46,7 @@ func InitMiddle(path string) {
 	}
 }
 
-func Computing(buf []byte, path string) ([]byte, error) {
+func (c *Commputing)Computing(buf []byte, path string) ([]byte, error) {
 	input, err := GetData(buf)
 	ruleDatas, err := GetRule(input, path)
 	if err != nil {
